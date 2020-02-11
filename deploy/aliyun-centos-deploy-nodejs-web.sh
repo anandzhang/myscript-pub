@@ -92,16 +92,19 @@ read -p "Enter entry file: (eg: index.js or src/app.js) " entry_file
 pm2 start "$git_repository/$entry_file" --name web --watch
 
 echo '## Configuring nginx'
+master_config_file=/etc/nginx/nginx.conf
+http_config_file=/etc/nginx/conf.d/default.conf
+doc_root_dir=/usr/share/nginx/html
 # Query server public IP
-ip=`curl ifconfig.me/ip`
+ip=$(curl -s ifconfig.me/ip)
+conf=$(curl -sL https://git.io/JvCG6)
+echo "${conf/ip/$ip}" >$http_config_file
 
 echo '## Start/enable nginx server'
 systemctl enable nginx
 systemctl start nginx
+
 # echo '## Open port 80 and 443'
 # firewall-cmd --permanent --zone=public --add-service=http
 # firewall-cmd --permanent --zone=public --add-service=https
 # firewall-cmd --reload
-master_config_file=/etc/nginx/nginx.conf
-http_config_file=/etc/nginx/conf.d/default.conf
-doc_root_dir=/usr/share/nginx/html
