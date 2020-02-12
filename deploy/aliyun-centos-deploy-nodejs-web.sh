@@ -3,7 +3,6 @@
 # Setting up the environment needed to deploy a nodejs web project
 
 echo -e '\n## Installing Node.js 12.x Stable Release\n'
-# yum install -y gcc-c++ make
 curl -sL https://rpm.nodesource.com/setup_12.x | bash
 yum install -y nodejs
 
@@ -81,15 +80,22 @@ else
     git_repository=custom_repository
 fi
 read -p "Enter entry file: (eg: index.js or src/app.js) " entry_file
+cd $git_repository && npm install
 pm2 start "$git_repository/$entry_file" --name web --watch
+
+query_public_ip() {
+    ip=$(curl -s http://ifconfig.me/ip)
+    [ -z $ip ] && ip=$(curl -s https://api.ip.sb/ip)
+    [ -z $ip ] && ip=$(curl -s http://ip.cip.cc/)
+}
 
 echo -e '\n## Configuring nginx\n'
 master_config_file=/etc/nginx/nginx.conf
 http_config_file=/etc/nginx/conf.d/default.conf
 doc_root_dir=/usr/share/nginx/html
-# Query server public IP
-ip=$(curl -s ifconfig.me/ip)
-conf=$(curl -sL https://git.io/JvCG6)
+conf=$(curl -sL https://git.io/nodejs-default.conf)
+[ -z $conf ] && echo "get nginx nodejs failed"
+query_public_ip
 echo "${conf/ip/$ip}" >$http_config_file
 
 echo -e '\n## Start/enable nginx server\n'
