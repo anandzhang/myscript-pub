@@ -56,7 +56,6 @@ clone_git_repository() {
 question_install_git='Do you need to install git to clone the project you need to deploy？ (Y/n): '
 while true; do
     read -p "$question_install_git" flag_install_git
-    echo "test output: $flag_clone_info"
     if [ "$flag_install_git" == 'y' -o "$flag_install_git" == 'Y' ]; then
         echo '## Installing git'
         install_git
