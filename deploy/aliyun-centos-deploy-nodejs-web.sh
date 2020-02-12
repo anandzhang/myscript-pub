@@ -71,6 +71,31 @@ done
 echo -e '\n## Installing pm2 to run nodejs app\n'
 npm install -g pm2
 
+init_project() {
+    current=$(pwd)
+    cd $git_repository
+    npm install
+    while true; do
+        read -p "Do you need initialization？(Y/n) :" flag_init
+        if [ $flag_init == 'y' -o $flag_init == 'Y' ]; then
+            while true; do
+                read -p "enter command (enter exit to exit): " command
+                if [ $command == 'exit' ]; then
+                    break
+                fi
+                $command
+            done
+            break
+        elif [ $flag_init == 'n' -o $flag_init == 'N' ]; then
+            break
+        else
+            echo 'Please enter Y/n..'
+        fi
+    done
+    cd $current
+    unset current
+}
+
 echo -e '\n## Run the node project use pm2\n'
 if $git_repository; then
     echo "The cloned project: $git_repository"
@@ -80,7 +105,7 @@ else
     git_repository=custom_repository
 fi
 read -p "Enter entry file: (eg: index.js or src/app.js) " entry_file
-cd $git_repository && npm install
+init_project
 pm2 start "$git_repository/$entry_file" --name web --watch
 
 query_public_ip() {
