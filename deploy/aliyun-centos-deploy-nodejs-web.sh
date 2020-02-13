@@ -3,9 +3,36 @@
 # Setting up the environment needed to deploy a nodejs web project
 
 echo -e '\n## Installing Node.js 12.x Stable Release\n'
-# yum install -y gcc-c++ make
 curl -sL https://rpm.nodesource.com/setup_12.x | bash
 yum install -y nodejs
+
+install_mongodb() {
+    echo '## Install MongoDB Community Edition'
+    echo '[mongodb-org-4.2]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/4.2/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-4.2.asc' >/etc/yum.repos.d/mongodb-org-4.2.repo
+    yum install -y mongodb-org
+    echo '## Start MongoDB'
+    systemctl start mongod
+    systemctl enable mongod
+}
+
+while true; do
+    read -p "Do you need to install mongo？(Y/n): " flag_install_mongo
+    if [ "$flag_install_mongo" == 'y' -o "$flag_install_mongo" == 'Y' ]; then
+        install_mongodb
+        break
+    elif [ "$flag_install_mongo" == 'n' -o "$flag_install_mongo" == 'N' ]; then
+        echo -e '\n## MongoDB installation skipped\n'
+        break
+    else
+        question_install_git='Please type Y/n : '
+    fi
+done
+unset flag_install_mongo
 
 echo -e '\n## Installing nginx\n'
 echo '[nginx]
@@ -34,10 +61,10 @@ clone_git_repository() {
         echo -e "\nUsername: $git_username\nRepository: $git_repository\n"
         while true; do
             read -p 'Are you sure? (Y/n): ' flag_clone_info
-            if [ $flag_clone_info == 'y' -o $flag_clone_info == 'Y' ]; then
+            if [ "$flag_clone_info" == 'y' -o "$flag_clone_info" == 'Y' ]; then
                 flag_clone_info=true
                 break
-            elif [ $flag_clone_info == 'n' -o $flag_clone_info == 'N' ]; then
+            elif [ "$flag_clone_info" == 'n' -o "$flag_clone_info" == 'N' ]; then
                 echo 'Please enter again.'
                 flag_clone_info=false
                 break
@@ -49,8 +76,12 @@ clone_git_repository() {
             break
         fi
     done
-    echo ''
-    git clone "https://github.com/$git_username/$git_repository.git"
+    unset flag_clone_info
+    clone_address="https://github.com/$git_username/$git_repository.git"
+    echo "Ready to clone: $clone_address"
+    git clone $clone_address
+    unset clone_address
+    unset git_username
 }
 
 question_install_git='Do you need to install git to clone the project you need to deploy？ (Y/n): '
@@ -68,29 +99,89 @@ while true; do
         question_install_git='Please type Y/n : '
     fi
 done
+unset flag_install_git
 
 echo -e '\n## Installing pm2 to run nodejs app\n'
 npm install -g pm2
 
+init_project() {
+    cd $project_relative_path
+    npm install
+    while true; do
+        read -p "Do you need initialization？(Y/n) :" flag_init
+        if [ "$flag_init" == 'y' -o "$flag_init" == 'Y' ]; then
+            while true; do
+                read -p "enter command (enter exit to exit): " command
+                if [ "$command" == 'exit' ]; then
+                    break
+                fi
+                $command
+            done
+            break
+        elif [ "$flag_init" == 'n' -o "$flag_init" == 'N' ]; then
+            break
+        else
+            echo 'Please enter Y/n..'
+        fi
+    done
+    cd "$current_path"
+    unset current_path
+    unset flag_init
+}
+
 echo -e '\n## Run the node project use pm2\n'
-if $git_repository; then
+if [ -n "$git_repository" ]; then
     echo "The cloned project: $git_repository"
     echo 'Starting for you automatically......'
 else
-    read -p "Enter project path: (eg: ~/blog or download/blog) " custom_repository
-    git_repository=custom_repository
+    read -p "Enter project path: (eg: ~/blog or download/blog) " git_repository
 fi
+current_path=$(pwd)
+project_relative_path="$git_repository"
+echo "current path: $current_path"
+echo "project path: $current_path/$project_relative_path"
+while true; do
+    read -p "Is the project path the nodejs project root path?(with package-lock.json) (Y/n): " flag_project
+    if [ "$flag_project" == 'y' -o "$flag_project" == 'Y' ]; then
+        break
+    elif [ "$flag_project" == 'n' -o "$flag_project" == 'N' ]; then
+        read -p "Enter Nodejs Web relative path: " relative_path
+        echo "project path: $current_path/$project_relative_path/$relative_path"
+    else
+        echo 'Please enter Y/n..'
+    fi
+done
+[ "$relative_path" ] && project_relative_path="$project_relative_path/$relative_path"
 read -p "Enter entry file: (eg: index.js or src/app.js) " entry_file
+init_project
 pm2 start "$git_repository/$entry_file" --name web --watch
+unset git_repository
+unset entry_file
+
+query_public_ip() {
+    ip=$(curl -s -m 3 http://ifconfig.me/ip)
+    [ -z $ip ] && echo 'Try to get public ip again' && ip=$(curl -s -m 3 https://api.ip.sb/ip)
+    [ -z $ip ] && echo 'Try to get public ip again' && ip=$(curl -s -m 3 http://ip.cip.cc/)
+    [ -z $ip ] && echo 'Try to get public ip again' && query_public_ip
+}
+
+config_nginx() {
+    get_conf_statuCode=$(curl -sL -m 6 -w %{http_code} -o $http_config_file https://git.io/nodejs-default.conf)
+    if [ $get_conf_statuCode = 200 ]; then
+        sed -i "s/ip/$ip/" $http_config_file
+    else
+        echo "Get nginx nodejs failed， retry..."
+        config_nginx
+    fi
+    unset get_conf_statuCode
+}
 
 echo -e '\n## Configuring nginx\n'
 master_config_file=/etc/nginx/nginx.conf
 http_config_file=/etc/nginx/conf.d/default.conf
 doc_root_dir=/usr/share/nginx/html
-# Query server public IP
-ip=$(curl -s ifconfig.me/ip)
-conf=$(curl -sL https://git.io/JvCG6)
-echo "${conf/ip/$ip}" >$http_config_file
+query_public_ip
+config_nginx
 
 echo -e '\n## Start/enable nginx server\n'
 systemctl enable nginx
