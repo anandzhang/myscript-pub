@@ -61,10 +61,10 @@ clone_git_repository() {
         echo -e "\nUsername: $git_username\nRepository: $git_repository\n"
         while true; do
             read -p 'Are you sure? (Y/n): ' flag_clone_info
-            if [ $flag_clone_info == 'y' -o $flag_clone_info == 'Y' ]; then
+            if [ "$flag_clone_info" == 'y' -o "$flag_clone_info" == 'Y' ]; then
                 flag_clone_info=true
                 break
-            elif [ $flag_clone_info == 'n' -o $flag_clone_info == 'N' ]; then
+            elif [ "$flag_clone_info" == 'n' -o "$flag_clone_info" == 'N' ]; then
                 echo 'Please enter again.'
                 flag_clone_info=false
                 break
@@ -76,6 +76,7 @@ clone_git_repository() {
             break
         fi
     done
+    unset flag_clone_info
     clone_address="https://github.com/$git_username/$git_repository.git"
     echo "Ready to clone: $clone_address"
     git clone $clone_address
@@ -109,28 +110,28 @@ init_project() {
     npm install
     while true; do
         read -p "Do you need initialization？(Y/n) :" flag_init
-        if [ $flag_init == 'y' -o $flag_init == 'Y' ]; then
+        if [ "$flag_init" == 'y' -o "$flag_init" == 'Y' ]; then
             while true; do
                 read -p "enter command (enter exit to exit): " command
-                if [ $command == 'exit' ]; then
+                if [ "$command" == 'exit' ]; then
                     break
                 fi
                 $command
             done
             break
-        elif [ $flag_init == 'n' -o $flag_init == 'N' ]; then
+        elif [ "$flag_init" == 'n' -o "$flag_init" == 'N' ]; then
             break
         else
             echo 'Please enter Y/n..'
         fi
     done
-    cd $current
+    cd "$current"
     unset current
     unset flag_init
 }
 
 echo -e '\n## Run the node project use pm2\n'
-if [ -n $git_repository ]; then
+if [ -n "$git_repository" ]; then
     echo "The cloned project: $git_repository"
     echo 'Starting for you automatically......'
 else
@@ -149,22 +150,24 @@ query_public_ip() {
     [ -z $ip ] && ehco 'Try to get public ip again' && query_public_ip
 }
 
-echo -e '\n## Configuring nginx\n'
-master_config_file=/etc/nginx/nginx.conf
-http_config_file=/etc/nginx/conf.d/default.conf
-doc_root_dir=/usr/share/nginx/html
-query_public_ip
-# nginx config
-while true; do
-    get_conf_statuCode=$(curl -sL -w %{http_code} -o $http_config_file https://git.io/nodejs-default.conf)
+config_nginx() {
+    get_conf_statuCode=$(curl -sL -m 6 -w %{http_code} -o $http_config_file https://git.io/nodejs-default.conf)
     if [ $get_conf_statuCode = 200 ]; then
         sed -i "s/ip/$ip/" $http_config_file
         break
     else
         echo "Get nginx nodejs failed， retry..."
+        config_nginx
     fi
-done
-unset get_conf_statuCode
+    unset get_conf_statuCode
+}
+
+echo -e '\n## Configuring nginx\n'
+master_config_file=/etc/nginx/nginx.conf
+http_config_file=/etc/nginx/conf.d/default.conf
+doc_root_dir=/usr/share/nginx/html
+query_public_ip
+config_nginx
 
 echo -e '\n## Start/enable nginx server\n'
 systemctl enable nginx
