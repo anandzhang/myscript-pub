@@ -6,6 +6,33 @@ echo -e '\n## Installing Node.js 12.x Stable Release\n'
 curl -sL https://rpm.nodesource.com/setup_12.x | bash
 yum install -y nodejs
 
+install_mongodb() {
+    echo '## Install MongoDB Community Edition'
+    echo '[mongodb-org-4.2]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/4.2/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-4.2.asc' >/etc/yum.repos.d/mongodb-org-4.2.repo
+    yum install -y mongodb-org
+    echo '## Start MongoDB'
+    systemctl start mongod
+    systemctl enable mongod
+}
+
+while true; do
+    read -p "Do you need to install mongo？(Y/n): " flag_install_mongo
+    if [ "$flag_install_mongo" == 'y' -o "$flag_install_mongo" == 'Y' ]; then
+        install_mongodb
+        break
+    elif [ "$flag_install_mongo" == 'n' -o "$flag_install_mongo" == 'N' ]; then
+        echo -e '\n## MongoDB installation skipped\n'
+        break
+    else
+        question_install_git='Please type Y/n : '
+    fi
+done
+
 echo -e '\n## Installing nginx\n'
 echo '[nginx]
 name=nginx repo
@@ -97,31 +124,39 @@ init_project() {
 }
 
 echo -e '\n## Run the node project use pm2\n'
-if $git_repository; then
+if [ -n $git_repository ]; then
     echo "The cloned project: $git_repository"
     echo 'Starting for you automatically......'
 else
-    read -p "Enter project path: (eg: ~/blog or download/blog) " custom_repository
-    git_repository=custom_repository
+    read -p "Enter project path: (eg: ~/blog or download/blog) " git_repository
 fi
 read -p "Enter entry file: (eg: index.js or src/app.js) " entry_file
 init_project
 pm2 start "$git_repository/$entry_file" --name web --watch
 
 query_public_ip() {
-    ip=$(curl -s http://ifconfig.me/ip)
-    [ -z $ip ] && ip=$(curl -s https://api.ip.sb/ip)
-    [ -z $ip ] && ip=$(curl -s http://ip.cip.cc/)
+    ip=$(curl -s -m 3 http://ifconfig.me/ip)
+    [ -z $ip ] && ehco 'Try to get public ip again' && ip=$(curl -s -m https://api.ip.sb/ip)
+    [ -z $ip ] && ehco 'Try to get public ip again' && ip=$(curl -s -m http://ip.cip.cc/)
+    [ -z $ip ] && ehco 'Try to get public ip again' && query_public_ip
 }
 
 echo -e '\n## Configuring nginx\n'
 master_config_file=/etc/nginx/nginx.conf
 http_config_file=/etc/nginx/conf.d/default.conf
 doc_root_dir=/usr/share/nginx/html
-conf=$(curl -sL https://git.io/nodejs-default.conf)
-[ -z $conf ] && echo "get nginx nodejs failed"
 query_public_ip
-echo "${conf/ip/$ip}" >$http_config_file
+# nginx config
+while true; do
+    get_conf_statuCode=$(curl -sL -w %{http_code} -o $http_config_file https://git.io/nodejs-default.conf)
+    if [ $get_conf_statuCode = 200 ]; then
+        sed -i "s/ip/$ip/" $http_config_file
+        cat $http_config_file
+        break
+    else
+        echo "Get nginx nodejs failed， retry..."
+    fi
+done
 
 echo -e '\n## Start/enable nginx server\n'
 systemctl enable nginx
