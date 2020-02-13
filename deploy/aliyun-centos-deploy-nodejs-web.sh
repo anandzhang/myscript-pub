@@ -32,6 +32,7 @@ while true; do
         question_install_git='Please type Y/n : '
     fi
 done
+unset flag_install_mongo
 
 echo -e '\n## Installing nginx\n'
 echo '[nginx]
@@ -75,8 +76,11 @@ clone_git_repository() {
             break
         fi
     done
-    echo ''
-    git clone "https://github.com/$git_username/$git_repository.git"
+    clone_address="https://github.com/$git_username/$git_repository.git"
+    echo "Ready to clone: $clone_address"
+    git clone $clone_address
+    unset clone_address
+    unset git_username
 }
 
 question_install_git='Do you need to install git to clone the project you need to deploy？ (Y/n): '
@@ -94,6 +98,7 @@ while true; do
         question_install_git='Please type Y/n : '
     fi
 done
+unset flag_install_git
 
 echo -e '\n## Installing pm2 to run nodejs app\n'
 npm install -g pm2
@@ -121,6 +126,7 @@ init_project() {
     done
     cd $current
     unset current
+    unset flag_init
 }
 
 echo -e '\n## Run the node project use pm2\n'
@@ -133,6 +139,8 @@ fi
 read -p "Enter entry file: (eg: index.js or src/app.js) " entry_file
 init_project
 pm2 start "$git_repository/$entry_file" --name web --watch
+unset git_repository
+unset entry_file
 
 query_public_ip() {
     ip=$(curl -s -m 3 http://ifconfig.me/ip)
@@ -151,12 +159,12 @@ while true; do
     get_conf_statuCode=$(curl -sL -w %{http_code} -o $http_config_file https://git.io/nodejs-default.conf)
     if [ $get_conf_statuCode = 200 ]; then
         sed -i "s/ip/$ip/" $http_config_file
-        cat $http_config_file
         break
     else
         echo "Get nginx nodejs failed， retry..."
     fi
 done
+unset get_conf_statuCode
 
 echo -e '\n## Start/enable nginx server\n'
 systemctl enable nginx
