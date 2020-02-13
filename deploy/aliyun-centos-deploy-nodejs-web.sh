@@ -105,8 +105,7 @@ echo -e '\n## Installing pm2 to run nodejs app\n'
 npm install -g pm2
 
 init_project() {
-    current=$(pwd)
-    cd $git_repository
+    cd $project_relative_path
     npm install
     while true; do
         read -p "Do you need initialization？(Y/n) :" flag_init
@@ -125,8 +124,8 @@ init_project() {
             echo 'Please enter Y/n..'
         fi
     done
-    cd "$current"
-    unset current
+    cd "$current_path"
+    unset current_path
     unset flag_init
 }
 
@@ -137,6 +136,22 @@ if [ -n "$git_repository" ]; then
 else
     read -p "Enter project path: (eg: ~/blog or download/blog) " git_repository
 fi
+current_path=$(pwd)
+project_relative_path="$git_repository"
+echo "current path: $current_path"
+echo "project path: $current_path/$project_relative_path"
+while true; do
+    read -p "Is the project path the nodejs project root path?(with package-lock.json) (Y/n): " flag_project
+    if [ "$flag_project" == 'y' -o "$flag_project" == 'Y' ]; then
+        break
+    elif [ "$flag_project" == 'n' -o "$flag_project" == 'N' ]; then
+        read -p "Enter Nodejs Web relative path: " relative_path
+        echo "project path: $current_path/$project_relative_path/$relative_path"
+    else
+        echo 'Please enter Y/n..'
+    fi
+done
+[ "$relative_path" ] && project_relative_path="$project_relative_path/$relative_path"
 read -p "Enter entry file: (eg: index.js or src/app.js) " entry_file
 init_project
 pm2 start "$git_repository/$entry_file" --name web --watch
@@ -145,16 +160,15 @@ unset entry_file
 
 query_public_ip() {
     ip=$(curl -s -m 3 http://ifconfig.me/ip)
-    [ -z $ip ] && ehco 'Try to get public ip again' && ip=$(curl -s -m https://api.ip.sb/ip)
-    [ -z $ip ] && ehco 'Try to get public ip again' && ip=$(curl -s -m http://ip.cip.cc/)
-    [ -z $ip ] && ehco 'Try to get public ip again' && query_public_ip
+    [ -z $ip ] && echo 'Try to get public ip again' && ip=$(curl -s -m 3 https://api.ip.sb/ip)
+    [ -z $ip ] && echo 'Try to get public ip again' && ip=$(curl -s -m 3 http://ip.cip.cc/)
+    [ -z $ip ] && echo 'Try to get public ip again' && query_public_ip
 }
 
 config_nginx() {
     get_conf_statuCode=$(curl -sL -m 6 -w %{http_code} -o $http_config_file https://git.io/nodejs-default.conf)
     if [ $get_conf_statuCode = 200 ]; then
         sed -i "s/ip/$ip/" $http_config_file
-        break
     else
         echo "Get nginx nodejs failed， retry..."
         config_nginx
